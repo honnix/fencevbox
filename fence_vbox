@@ -1,0 +1,283 @@
+#!/usr/bin/perl -w
+
+package FenceVbox;
+use strict;
+use warnings;
+use Data::Dumper;
+use Getopt::Std;
+use IPC::Open3;
+
+=pod
+
+=head1 NAME
+
+fence_vbox - Simple fence agent for ORACLE VirtualBox
+
+=head1 AUTHORS
+
+Nikolai Stolbovoi <nikolai.stolbovoi@libero.it>
+
+=head1 DESCRIPTION
+
+Use VBoxManage console utility over ssh to reboot, on, off and get status of vboxguest.
+
+According http://sources.redhat.com/cluster/wiki/FenceAgentAPI
+
+=head1 USAGE
+
+
+=begin html
+
+<pre>
+fence_vbox [options]
+
+Options:
+  -s <string>      vboxhost (vbox server)
+  -g <string>      vmname (guest name)
+  -a <string>      action: reboot (default), off, on or status
+  -l <string>      login (default=root)
+  -v               version  
+</pre>
+
+=end html
+
+
+=head1 INSTALLATION
+
+cp fence_vbox in /sbin
+
+=head1 REQUIREMENT
+
+Vboxguest must be able to access vboxhost without password
+
+=cut
+
+
+
+my $VERSION = 0.1;
+
+sub new {
+    my ($class, $def) = @_;
+
+    my $self = bless $def||{}, $class;
+
+	$self->{pname}	= $0;
+	$self->{exit}	= 1;
+
+    return $self;
+}
+
+sub get_status {
+	my ($s) = @_;
+
+	if (!$s->{status} || $s->{action} !~ /^status$/oi) {
+
+		my $cmd = "$s->{sshcmd} $s->{login}\@$s->{vboxhost} '$s->{vboxcmd} --nologo showvminfo $s->{vmname} | grep -i state:'";
+	
+		print "$s->{pname}:$cmd\n";
+		open(OUT, '-|', $cmd) or die "$s->{pname}:status: $cmd";
+		my ($status);
+		while(<OUT>) {
+			print "$s->{pname}:status:$_";
+			(($status) = /^state:\s+(\w.+\w)\s*\(/oi) && last;
+		}
+		
+		$s->{status} = ($status||'unknown');
+		if ($s->{action} =~ /^on$/oi) {
+			if ($s->{status} =~ /running/) {
+				$s->{exit} = 0
+			} else {
+				$s->{exit} = 1
+			}
+		} elsif ($s->{action} =~ /^off$/oi) {
+			if ($s->{status} =~ /powered off/) {
+				$s->{exit} = 0
+			} else {
+				$s->{exit} = 1
+			}
+		} elsif ($s->{action} =~ /^reboot$/oi) {
+			if ($s->{status} =~ /running/) {
+				$s->{exit} = 0
+			} else {
+				$s->{exit} = 1
+			}
+		} else {
+			if ($s->{status} =~ /running/) {
+				$s->{exit} = 0
+			} elsif ($s->{status} =~ /powered off/) {
+				$s->{exit} = 2
+			}
+			else {
+				$s->{exit} = 1
+			}
+		}
+	}
+
+	return 1;
+}
+
+sub action {
+	my ($s) = @_;
+	my $cmd;
+		
+	if ($s->{action} =~ /^on$/oi) {
+		if ($s->{status} !~ /running/)	{
+			$cmd = "$s->{sshcmd} $s->{login}\@$s->{vboxhost} '$s->{vboxcmd} --nologo startvm $s->{vmname}'";
+			print "$s->{pname}:$cmd\n";
+			open(OUT, '-|', $cmd) or die "$s->{pname}:$s->{action}: $cmd";
+			while(<OUT>) {print "$s->{pname}:$_"}
+			sleep 1;
+		}
+	}
+	elsif ($s->{action} =~ /^off$/oi) {
+		if ($s->{status} =~ /running/)	{
+			$cmd = "$s->{sshcmd} $s->{login}\@$s->{vboxhost} '$s->{vboxcmd} --nologo controlvm $s->{vmname} poweroff'";
+			print "$s->{pname}:$cmd\n";
+			open(OUT, '-|', $cmd) or die "$s->{pname}:$s->{action}: $cmd";
+			while(<OUT>) {print "$s->{pname}:$_"}
+		}
+	}
+	elsif ($s->{action} =~ /^reboot$/oi) {
+		if ($s->{status} =~ /running/)	{
+			$cmd = "$s->{sshcmd} $s->{login}\@$s->{vboxhost} '$s->{vboxcmd} --nologo controlvm $s->{vmname} reset'";
+		}
+		else {
+			$cmd = "$s->{sshcmd} $s->{login}\@$s->{vboxhost} '$s->{vboxcmd} --nologo startvm $s->{vmname}'";
+		}
+		print "$s->{pname}:$cmd\n";
+		open(OUT, '-|', $cmd) or die "$s->{pname}:$s->{action}: $cmd";
+		while(<OUT>) {print "$s->{pname}:$_"}
+		sleep 1;
+	}
+	elsif ($s->{action} =~ /^status$/oi) {
+	}
+	else {
+		die {print "$s->{pname}:Unknown action=$s->{action}\n"}
+	}
+	
+	return 1;
+}
+
+
+sub get_opts {
+	my ($s) = @_;
+	
+	if (scalar @ARGV) {
+		$s->{argv} = $s->get_opts_from_argv
+	}
+	else {
+		$s->{argv} = $s->get_opts_from_stdin
+	}	
+
+	if (!$s->{argv}   ||
+		!$s->{vmname} ||
+		!$s->{vboxhost} ||
+		($s->{action} !~ /^(reboot|on|off|status)$/)
+		) {
+		$s->{usage}=1;
+	}
+	
+	return !$s->{usage};
+}
+
+sub get_opts_from_argv {
+	my ($s) = @_;
+
+	our ($opt_s, $opt_g, $opt_l, $opt_a, $opt_h);
+	
+	getopts("s:g:a:l:hv");
+
+	if ($opt_s){$s->{vboxhost} = $opt_s; $s->{argv}++}
+	if ($opt_g){$s->{vmname} = $opt_g; $s->{argv}++}
+	if ($opt_l){$s->{login}  = $opt_l; $s->{argv}++}
+	if ($opt_a){$s->{action} = $opt_a; $s->{argv}++}
+	if ($opt_h){$s->{usage}  = $opt_h; $s->{argv}++}
+
+	return $s->{argv}
+}
+
+sub get_opts_from_stdin {
+	my ($s) = @_;
+
+	eval {
+        local $SIG{ALRM} = sub { die };
+        alarm 1;
+		while(<>) {
+			chomp;
+			s/^\s+|\s+$//og; # strip leading and trailing whitespace
+			/^\s*#/ && next; # skip comments
+	
+			if (/^(.*)\s*=\s*(.*)$/o) {
+				$s->{$1} = $2;
+				$s->{argv}++;
+			}
+		}
+        alarm 0;
+    };
+	
+	return $s->{argv}
+}
+
+sub version
+{
+	print "version\n";
+	exit 0;
+}
+
+sub print_usage {
+	my ($s) = @_;
+	
+	print <<EOF
+Usage:
+
+$s->{pname} [options]
+
+Options:
+  -s <string>      vboxhost (vbox server)
+  -g <string>      vmname (guest name)
+  -a <string>      action: reboot (default), off, on or status
+  -l <string>      login (default=root)
+  -v               version  
+EOF
+
+}
+
+
+DESTROY {
+	my ($s) = @_;
+	exit $s->{exit};
+}
+1;
+
+package main;
+
+my $fv = FenceVbox->new({
+	sshcmd	 => '/usr/bin/ssh',
+	vboxcmd	 => '/usr/bin/VBoxManage',
+	login => 'root',
+	action 	 => 'reboot',
+	stdin_timeout => '1',
+	});
+
+	
+if (!$fv->get_opts) {
+	$fv->print_usage;
+	exit 1;
+}
+	
+if (!$fv->get_status) {
+	print "$fv->{pname}: Can\'t perform status\n";
+	exit 1;
+}
+
+if (!$fv->action) {
+	print "$fv->{pname}: Can\'t perform '$fv->{action}'\n";
+	exit 1;
+}
+
+if (!$fv->get_status) {
+	print "$fv->{pname}: Can\'t perform status\n";
+	exit 1;
+}
+
+print "$fv->{pname}: OK: status=$fv->{status}, exit=$fv->{exit}\n";

@@ -1,0 +1,71 @@
+<?xml version="1.0" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>fence_vbox - Simple fence agent for ORACLE VirtualBox</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rev="made" href="mailto:root@localhost" />
+</head>
+
+<body style="background-color: white">
+
+
+<!-- INDEX BEGIN -->
+<div name="index">
+<p><a name="__index__"></a></p>
+
+<ul>
+
+	<li><a href="#name">NAME</a></li>
+	<li><a href="#authors">AUTHORS</a></li>
+	<li><a href="#description">DESCRIPTION</a></li>
+	<li><a href="#usage">USAGE</a></li>
+	<li><a href="#installation">INSTALLATION</a></li>
+	<li><a href="#requirement">REQUIREMENT</a></li>
+</ul>
+
+<hr name="index" />
+</div>
+<!-- INDEX END -->
+
+<p>
+</p>
+<hr />
+<h1><a name="name">NAME</a></h1>
+<p>fence_vbox - Simple fence agent for ORACLE VirtualBox</p>
+<p>
+</p>
+<hr />
+<h1><a name="authors">AUTHORS</a></h1>
+<p>Nikolai Stolbovoi &lt;<a href="mailto:nikolai.stolbovoi@libero.it">nikolai.stolbovoi@libero.it</a>&gt;</p>
+<p>
+</p>
+<hr />
+<h1><a name="description">DESCRIPTION</a></h1>
+<p>Use VBoxManage console utility over ssh to reboot, on, off and get status of vboxguest.</p>
+<p>According <a href="http://sources.redhat.com/cluster/wiki/FenceAgentAPI">http://sources.redhat.com/cluster/wiki/FenceAgentAPI</a></p>
+<p>
+</p>
+<hr />
+<h1><a name="usage">USAGE</a></h1>
+<pre>
+fence_vbox [options]Options:
+  -s <string>      vboxhost (vbox server)
+  -g <string>      vmname (guest name)
+  -a <string>      action: reboot (default), off, on or status
+  -u <string>      login (default=root)
+  -v               version  
+</pre><p>
+</p>
+<hr />
+<h1><a name="installation">INSTALLATION</a></h1>
+<p>cp fence_vbox in /sbin</p>
+<p>
+</p>
+<hr />
+<h1><a name="requirement">REQUIREMENT</a></h1>
+<p>Vboxguest must be able to access vboxhost without password</p>
+
+</body>
+
+</html>
